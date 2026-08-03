@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AssistantMessage, Model, TextContent } from "@earendil-works/pi-ai";
+import * as CodingAgent from "@earendil-works/pi-coding-agent";
 import {
   type AgentSessionEvent,
   type CreateAgentSessionOptions,
@@ -10,7 +11,7 @@ import {
   DefaultResourceLoader,
   getAgentDir,
   ModelRegistry,
-  ModelRuntime,
+  type ModelRuntime,
   SessionManager,
   SettingsManager,
   type ToolDefinition,
@@ -220,7 +221,7 @@ export interface WorkflowAgentOptions {
    * so a workflow subagent can't fan out through them either (#107).
    */
   excludeTools?: string[];
-  /** Override any createAgentSession option (model, modelRuntime, resourceLoader, etc.). */
+  /** Override any createAgentSession option (model backend, resourceLoader, etc.). */
   session?: Partial<CreateAgentSessionOptions>;
   /** Extra system guidance prepended to every subagent task. */
   instructions?: string;
@@ -248,35 +249,49 @@ export interface WorkflowAgentOptions {
   persistAgentSessions?: boolean;
 }
 
-// pi >= 0.80.8: ModelRegistry is a sync facade over an async-created ModelRuntime
-// (AuthStorage/ModelRegistry.create are gone). The disk-backed fallback is built
-// lazily; sync callers see [] until it resolves and real specs on later reads.
-let fallbackRuntimePromise: Promise<ModelRuntime> | undefined;
+// Pi 0.80.x wraps an async-created ModelRuntime in ModelRegistry. OMP 17.x
+// removed that wrapper and owns auth directly in ModelRegistry. Build whichever
+// backend the loaded host exposes, without statically importing an optional
+// runtime export (a missing named ESM export prevents the whole extension loading).
+let fallbackRegistryPromise: Promise<ModelRegistry> | undefined;
 let fallbackRegistry: ModelRegistry | undefined;
 
 function ensureFallbackRegistry(): Promise<ModelRegistry> {
-  if (!fallbackRuntimePromise) {
+  if (!fallbackRegistryPromise) {
     const dir = getAgentDir();
-    // Same auth.json/models.json createAgentSession uses by default, so a model
-    // resolved here carries valid credentials.
-    fallbackRuntimePromise = (async () => {
-      const runtime = await ModelRuntime.create({
-        authPath: join(dir, "auth.json"),
-        modelsPath: join(dir, "models.json"),
-      });
-      // Warm the availability snapshot so the facade's sync getAvailable() is
-      // populated immediately after this promise resolves.
-      await runtime.getAvailable().catch(() => {});
-      return runtime;
+    fallbackRegistryPromise = (async () => {
+      if (CodingAgent.ModelRuntime) {
+        const runtime = await CodingAgent.ModelRuntime.create({
+          authPath: join(dir, "auth.json"),
+          modelsPath: join(dir, "models.json"),
+        });
+        // Warm the availability snapshot so the facade's sync getAvailable() is
+        // populated immediately after this promise resolves.
+        await runtime.getAvailable().catch(() => {});
+        return new ModelRegistry(runtime);
+      }
+
+      const currentApi = CodingAgent as unknown as {
+        discoverAuthStorage?: (agentDir?: string) => Promise<unknown>;
+      };
+      if (!currentApi.discoverAuthStorage) {
+        throw new Error("Host coding-agent exports neither ModelRuntime nor discoverAuthStorage");
+      }
+      const authStorage = await currentApi.discoverAuthStorage(dir);
+      const CurrentModelRegistry = ModelRegistry as unknown as new (
+        authStorage: unknown,
+        modelsPath?: string,
+      ) => ModelRegistry;
+      return new CurrentModelRegistry(authStorage, join(dir, "models.yml"));
     })();
-    // Don't cache a rejection: a transient failure (e.g. auth.json lock) would
+    // Don't cache a rejection: a transient failure (e.g. auth DB lock) would
     // otherwise wedge the fallback for the rest of the process.
-    fallbackRuntimePromise.catch(() => {
-      fallbackRuntimePromise = undefined;
+    fallbackRegistryPromise.catch(() => {
+      fallbackRegistryPromise = undefined;
     });
   }
-  return fallbackRuntimePromise.then((runtime) => {
-    fallbackRegistry ??= new ModelRegistry(runtime);
+  return fallbackRegistryPromise.then((registry) => {
+    fallbackRegistry ??= registry;
     return fallbackRegistry;
   });
 }
@@ -303,6 +318,31 @@ export function runtimeOf(registry: ModelRegistry): ModelRuntime | undefined {
     );
   }
   return runtime;
+}
+
+/** Build the direct ModelRegistry options required by current OMP hosts. */
+export function currentModelRegistrySessionOptions(
+  registry: ModelRegistry,
+  label?: string,
+): Partial<CreateAgentSessionOptions> {
+  return {
+    modelRegistry: registry,
+    agentId: `workflow-${randomUUID()}`,
+    agentDisplayName: label ?? "workflow",
+    taskDepth: 1,
+  } as Partial<CreateAgentSessionOptions>;
+}
+
+/** Select the model-backend and subagent identity options supported by the loaded Pi/OMP host. */
+export function sessionModelBackendOptions(
+  registry: ModelRegistry,
+  label?: string,
+): Partial<CreateAgentSessionOptions> {
+  if (!CodingAgent.ModelRuntime) {
+    return currentModelRegistrySessionOptions(registry, label);
+  }
+  const runtime = runtimeOf(registry);
+  return runtime ? ({ modelRuntime: runtime } as Partial<CreateAgentSessionOptions>) : {};
 }
 
 /**
@@ -916,9 +956,6 @@ export class WorkflowAgent {
     }
 
     const agentDir = getAgentDir();
-    // The runtime behind the resolved registry, handed to the subagent session
-    // below so it shares the host session's exact catalog and auth.
-    const modelRuntime = runtimeOf(modelRegistry);
     // Key persisted sessions by the runner's project cwd (this.cwd), NOT the
     // per-call runCwd: agents working in short-lived git worktrees should still
     // group under the project's session dir instead of scattering across
@@ -942,10 +979,10 @@ export class WorkflowAgent {
         // wins and skips the shared build entirely; the ...this.sessionOptions
         // spread below re-applies the same injected value harmlessly.
         resourceLoader: this.sessionOptions.resourceLoader ?? (await this.getSharedResourceLoader(agentDir)),
-        // Share the resolved registry's ModelRuntime (catalog + auth, including
-        // extension-registered providers) with the subagent session. pi >= 0.80.8
-        // takes modelRuntime here; the old modelRegistry option is gone.
-        ...(modelRuntime ? { modelRuntime } : {}),
+        // Share the host's model backend (catalog + auth, including
+        // extension-registered providers). Pi 0.80.x takes modelRuntime; current
+        // OMP takes modelRegistry directly.
+        ...sessionModelBackendOptions(modelRegistry, options.label),
         ...this.sessionOptions,
         // Named threads must retain their own manager even when an embedder supplied
         // a default manager for ordinary one-shot calls.
@@ -973,7 +1010,6 @@ export class WorkflowAgent {
     // the collected window survives compaction, and it naturally spans the
     // schema path's repair re-prompts, which run on this same session.
     const turnMessages: unknown[] = [];
-
     // Name the persisted session so it's identifiable in session pickers.
     // Skip when an injected session.sessionManager override won (tests/embedders),
     // and name a threaded session only on its first turn.

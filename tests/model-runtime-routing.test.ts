@@ -22,7 +22,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
-import { runtimeOf, WorkflowAgent } from "../src/agent.js";
+import { currentModelRegistrySessionOptions, runtimeOf, WorkflowAgent } from "../src/agent.js";
 import { withFakeHomeAsync } from "./helpers/fake-home.js";
 
 test("runtimeOf reaches the ModelRuntime behind pi's real ModelRegistry facade (pi-internals contract)", async () => {
@@ -45,6 +45,22 @@ test("runtimeOf reaches the ModelRuntime behind pi's real ModelRegistry facade (
 test("runtimeOf degrades to undefined (no throw) on a registry without a runtime field", () => {
   const mock = { getAvailable: () => [], find: () => undefined, getAll: () => [] } as unknown as ModelRegistry;
   assert.equal(runtimeOf(mock), undefined);
+});
+
+test("current OMP ModelRegistry sessions get distinct subagent identities", () => {
+  const registry = { getAvailable: () => [], find: () => undefined, getAll: () => [] } as unknown as ModelRegistry;
+  const first = currentModelRegistrySessionOptions(registry, "first");
+  const second = currentModelRegistrySessionOptions(registry, "second");
+
+  assert.equal(first.modelRegistry, registry);
+  assert.equal(second.modelRegistry, registry);
+  assert.equal(first.agentDisplayName, "first");
+  assert.equal(second.agentDisplayName, "second");
+  assert.equal(first.taskDepth, 1);
+  assert.equal(second.taskDepth, 1);
+  assert.notEqual(first.agentId, second.agentId);
+  assert.notEqual(first.agentId, "Main");
+  assert.notEqual(second.agentId, "Main");
 });
 
 test("a shared host ModelRegistry routes subagents to extension-registered providers (no session override)", async () => {

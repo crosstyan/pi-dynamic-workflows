@@ -58,7 +58,11 @@ const RENDERED_PROMPT_BUDGET_BYTES = 800;
 // instead. The exact wording increases the measured definition from 4,276
 // to 4,392 bytes (+116), and the accepted ceiling moves with it, from
 // 4,283 to 4,392.
-const TOOL_DEFINITION_BUDGET_BYTES = 4_392;
+//
+// OMP's legacy TypeBox compatibility layer cannot compose Type.Optional
+// with Type.Unsafe, so `args` now uses Type.Record(Type.String(), Type.Any()).
+// The emitted patternProperties adds 32 bytes, moving the ceiling to 4,424.
+const TOOL_DEFINITION_BUDGET_BYTES = 4_424;
 
 test("rendered workflow prompt contribution stays within its accepted size", async () => {
   await withRenderedWorkflow(async ({ systemPrompt, promptLines }) => {

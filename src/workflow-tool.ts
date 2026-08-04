@@ -59,12 +59,10 @@ const workflowToolSchema = Type.Object({
     // that requires an args field fails validation regardless of what the
     // caller actually sent. Every built-in pattern's `args` is a JSON object
     // at the top level, so declaring `type: "object"` is lossless and fixes
-    // the coercion. Type.Unsafe keeps the emitted schema minimal (no
-    // `properties`/`additionalProperties` boilerplate — JSON Schema already
-    // allows additional properties by default) to stay inside the
-    // provider-visible tool definition's byte budget.
-    Type.Unsafe<Record<string, unknown>>({
-      type: "object",
+    // the coercion. Type.Record preserves the arbitrary JSON object contract
+    // while remaining composable with Type.Optional in OMP's legacy TypeBox
+    // compatibility layer.
+    Type.Record(Type.String(), Type.Any(), {
       description: "Optional JSON value exposed to the workflow script as global `args`.",
     }),
   ),

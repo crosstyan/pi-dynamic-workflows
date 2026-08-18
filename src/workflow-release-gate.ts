@@ -477,14 +477,14 @@ function validatePackage(root: string, publishableFiles: readonly string[]): Wor
 /** Parse publishable paths from `npm pack --dry-run --json` without trusting external JSON shapes. */
 export function parseNpmPackFilePaths(output: string): string[] {
   const parsed: unknown = JSON.parse(output);
-  if (!Array.isArray(parsed)) {
-    return [];
-  }
-  const first = parsed[0];
-  if (!isRecord(first) || !Array.isArray(first.files)) {
-    return [];
-  }
-  return first.files.flatMap((file: unknown) => (isRecord(file) && typeof file.path === "string" ? [file.path] : []));
+  // npm <= 11 emits an array of package manifests. npm 12 emits an object
+  // keyed by package name. Accept both without trusting either manifest shape.
+  const packages: unknown[] = Array.isArray(parsed) ? parsed : isRecord(parsed) ? Object.values(parsed) : [];
+  return packages.flatMap((pkg) =>
+    isRecord(pkg) && Array.isArray(pkg.files)
+      ? pkg.files.flatMap((file: unknown) => (isRecord(file) && typeof file.path === "string" ? [file.path] : []))
+      : [],
+  );
 }
 
 /** Return every model-free contract, package, documentation, and guidance alignment diagnostic. */

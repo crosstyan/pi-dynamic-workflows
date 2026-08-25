@@ -168,13 +168,15 @@ test("createWorkflowTool declares `args` as an explicitly typed object, not a ty
   );
 });
 
-test("createWorkflowTool keeps background behavior in the parameter schema", () => {
+test("createWorkflowTool requires a positive wait opt-in for blocking execution", () => {
   const tool = createWorkflowTool();
-  const description = parameterDescription(tool, "background");
+  const parameters = tool.parameters as { properties: Record<string, unknown> };
+  const description = parameterDescription(tool, "wait");
 
-  assert.match(description, /Default: true/i);
+  assert.equal(parameters.properties.background, undefined);
+  assert.match(description, /Default: false/i);
   assert.match(description, /result is delivered back.*when it finishes/i);
-  assert.match(description, /false only when.*result inline.*same turn/i);
+  assert.match(description, /true only when the user explicitly asks.*wait/i);
   assert.doesNotMatch(tool.promptGuidelines.join(" "), /runs are background by default/i);
 });
 
@@ -332,6 +334,43 @@ function withToolTempCwd(fn: (cwd: string) => Promise<void>) {
     }
   };
 }
+
+test(
+  "workflow tool blocks only for explicit wait, while omitted and legacy background flags return immediately",
+  withToolTempCwd(async (cwd) => {
+    const manager = new WorkflowManager({ cwd, agent: toolFakeAgent("done") });
+    manager.on("error", () => {});
+    const originalStartInBackground = manager.startInBackground.bind(manager);
+    const originalRunSync = manager.runSync.bind(manager);
+    let backgroundCalls = 0;
+    let syncCalls = 0;
+    manager.startInBackground = (...args) => {
+      backgroundCalls += 1;
+      return originalStartInBackground(...args);
+    };
+    manager.runSync = async (...args) => {
+      syncCalls += 1;
+      return originalRunSync(...args);
+    };
+    const tool = createWorkflowTool({ cwd, manager });
+
+    const omitted = await tool.execute("default", { script: resumeToolScript }, undefined, undefined, undefined);
+    const legacy = await tool.execute(
+      "legacy",
+      { script: resumeToolScript, background: false } as never,
+      undefined,
+      undefined,
+      undefined,
+    );
+    await tool.execute("wait", { script: resumeToolScript, wait: true } as never, undefined, undefined, undefined);
+
+    assert.equal((omitted.details as { background?: boolean }).background, true);
+    assert.equal((legacy.details as { background?: boolean }).background, true);
+    assert.equal(backgroundCalls, 2);
+    assert.equal(syncCalls, 1);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }),
+);
 
 test("workflowToolSchema exposes resumeFromRunId, script, and name as optional at the schema level", () => {
   const tool = createWorkflowTool();

@@ -40,8 +40,8 @@ from inside a script fails as an unknown saved workflow; use the top-level
 { "name": "deep-research", "args": { "question": "What are the tradeoffs of X vs Y?" } }
 ```
 
-This is a `workflow` tool call, not a script — omit `script` entirely. The run
-starts in the background exactly like the slash-command form; `background`,
+This is a `workflow` tool call, not a script. Omit `script` entirely. The run
+starts in the background exactly like the slash-command form; `wait`,
 `maxAgents`, `concurrency`, `agentRetries`, `agentTimeoutMs`, and `tokenBudget`
 all still apply.
 

@@ -475,8 +475,9 @@ const capabilities: readonly CapabilityDescriptor[] = [
     "mutually exclusive with resumeFromRunId",
   ]),
   toolInput("args", "args?: unknown"),
-  toolInput("background", "background?: boolean = true", [
-    "background workflows are headless; use background false when checkpoint must show foreground confirmation",
+  toolInput("wait", "wait?: boolean = false", [
+    "set true only when the user explicitly asks to wait for the workflow result before continuing",
+    "background workflows are headless; use wait true when checkpoint must show foreground confirmation",
   ]),
   toolInput("maxAgents", "maxAgents?: number = 1000", [
     "default, not a hard product maximum",

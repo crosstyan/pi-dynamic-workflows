@@ -81,10 +81,10 @@ function armReasonClause(reason: ArmReason): string {
  * The #89 reassurance shared by every arming banner: a background run ENDING the
  * turn is expected, not a stall — the result auto-delivers back — so the model
  * shouldn't feel it must stay and block, nor avoid the tool to stay interactive.
- * Names when `background:false` is the right call (user waiting inline).
+ * Names when `wait:true` is the right call because the user asked to wait inline.
  */
 const BACKGROUND_DELIVERY_REASSURANCE =
-  "If you do call `workflow`, it runs in the background by default: this turn will end and the result is delivered back into the conversation automatically when it finishes — that's expected, not a stall, so you do not need to stay and block. Only pass background:false if the user is waiting for the result inline in this same turn.";
+  "If you do call `workflow`, it runs in the background by default: this turn will end and the result is delivered back into the conversation automatically when it finishes. Do not stay and block. Pass wait:true only when the user explicitly asks to wait for the result inline in this same turn.";
 
 /**
  * The directive appended to a submitted message when workflows mode is ARMED by a

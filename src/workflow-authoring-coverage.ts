@@ -49,7 +49,7 @@ export const WORKFLOW_AUTHORING_FROZEN_FILES = [
   },
   {
     path: "skills/workflow-authoring/references/lifecycle.md",
-    sha256: "9e1fddeb53bca20b245c3109d93f9f5cef957e5f196790652c3f35c9f0e56bfe",
+    sha256: "232d1ecda5afbe708cee2334040dcaf1dcce0aa684e9acac95daf67d5bf42ec4",
   },
   {
     path: "skills/workflow-authoring/references/pattern-selection.md",
@@ -170,7 +170,7 @@ const FROZEN_GUIDANCE_BY_CAPABILITY: Readonly<Record<string, readonly ProtectedG
     {
       path: LIFECYCLE_PATH,
       requiredText:
-        "A workflow invocation is backgrounded by default, and background workflows are headless: they cannot display checkpoint confirmation.",
+        "A workflow invocation runs in the background unless `wait: true`; background workflows are headless and cannot display checkpoint confirmation.",
     },
   ],
   "workflow.runtime.log": [
@@ -214,11 +214,11 @@ const FROZEN_GUIDANCE_BY_CAPABILITY: Readonly<Record<string, readonly ProtectedG
       requiredText: "Pass timestamps, randomness, and external decisions through `args`.",
     },
   ],
-  "workflow.tool-input.background": [
+  "workflow.tool-input.wait": [
     {
       path: LIFECYCLE_PATH,
       requiredText:
-        "A workflow invocation is backgrounded by default, and background workflows are headless: they cannot display checkpoint confirmation.",
+        "A workflow invocation runs in the background unless `wait: true`; background workflows are headless and cannot display checkpoint confirmation.",
     },
   ],
   "workflow.tool-input.maxAgents": [

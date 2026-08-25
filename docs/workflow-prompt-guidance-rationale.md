@@ -169,33 +169,33 @@ These facts were present in the old permanent guidance or README but were accide
 
 Confidence is very high that both mechanics are stable runtime contracts, useful for valid first attempts, and correctly placed in the parameter schema rather than permanent guidance.
 
-### Keep background behavior in the parameter schema and tool result
+### Keep wait behavior in the parameter schema and tool result
 
 Remove this permanent guideline without replacement:
 
 ```text
-For workflow, runs are background by default: the tool returns immediately with a run ID, the turn ends so the user isn't blocked, and the result is delivered back into the conversation when the run finishes. Pass background: false only when you must use the result inline in this same turn (it will block).
+For workflow, runs are background by default. The tool returns immediately with a run ID, the turn ends so the user isn't blocked, and the result is delivered back into the conversation when the run finishes. Pass wait: true only when the user explicitly asks to wait for the result inline in this same turn.
 ```
 
-Retain the pre-call contract in `background.description`:
+Retain the pre-call contract in `wait.description`:
 
 ```text
-Run the workflow in the background. Default: true — the tool returns immediately with a run ID, the turn ends so the user isn't blocked, and the result is delivered back into the conversation when it finishes. Set to false only when you need the result inline in this same turn (the call will block until the workflow completes).
+Wait for the workflow result inline in this turn. Default: false. The tool returns immediately with a run ID, the turn ends so the user isn't blocked, and the result is delivered back into the conversation when it finishes. Set to true only when the user explicitly asks you to wait for this workflow before continuing.
 ```
 
 #### Reasoning
 
-Background execution is a parameter choice rather than permanent selection policy. The parameter description presents the default and tradeoff when the parent constructs the call. After a background run starts, the tool result confirms that execution continues independently, automatic result delivery is enabled, and the run can be inspected or stopped.
+Waiting is a positive opt-in. This shape makes the safe path the easy one. A stale or habitual `background: false` call no longer blocks the parent turn. After a background run starts, the tool result confirms that execution continues independently, automatic result delivery is enabled, and the run can be inspected or stopped.
 
 Keeping the same behavior in a permanent guideline would duplicate the parameter contract and create another surface that could drift when execution behavior changes.
 
 #### Evidence
 
-`src/workflow-tool.ts` defaults omitted `background` to `true`. `backgroundStartedText()` supplies the post-call explanation and run-management commands. The prompt-placement research recommends placing background behavior and parameter defaults in schema and runtime rather than permanent guidance.
+`src/workflow-tool.ts` enters the synchronous path only for `wait: true`. Omitted `wait` and the removed `background` input both return immediately. `backgroundStartedText()` supplies the post-call explanation and run-management commands.
 
 #### Confidence
 
-Confidence is very high that `background.description` and the actual tool result are sufficient authorities and that no permanent replacement is needed.
+Confidence is very high that `wait.description` and the actual tool result are sufficient authorities and that no permanent replacement is needed.
 
 ### Keep conditional phase guidance in `script.description`
 

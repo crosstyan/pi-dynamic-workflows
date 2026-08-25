@@ -287,8 +287,8 @@ describe("buildArmedWorkflowPrompt", () => {
     const result = buildArmedWorkflowPrompt("test");
     assert.match(result, /runs in the background by default/i);
     assert.match(result, /delivered back into the conversation automatically/i);
-    assert.match(result, /that's expected, not a stall/i);
-    assert.match(result, /pass background:false if the user is waiting for the result inline/i);
+    assert.match(result, /do not stay and block/i);
+    assert.match(result, /pass wait:true only when the user explicitly asks to wait for the result inline/i);
   });
 
   it("states the truthful opt-in reason per path (keyword vs effort) (#P3)", async () => {

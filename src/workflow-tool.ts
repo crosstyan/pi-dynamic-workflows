@@ -66,10 +66,10 @@ const workflowToolSchema = Type.Object({
       description: "Optional JSON value exposed to the workflow script as global `args`.",
     }),
   ),
-  background: Type.Optional(
+  wait: Type.Optional(
     Type.Boolean({
       description:
-        "Run the workflow in the background. Default: true — the tool returns immediately with a run ID, the turn ends so the user isn't blocked, and the result is delivered back into the conversation when it finishes. Set to false only when you need the result inline in this same turn (the call will block until the workflow completes).",
+        "Wait for the workflow result inline in this turn. Default: false. The tool returns immediately with a run ID, the turn ends so the user isn't blocked, and the result is delivered back into the conversation when it finishes. Set to true only when the user explicitly asks you to wait for this workflow before continuing.",
     }),
   ),
   maxAgents: Type.Optional(
@@ -117,7 +117,7 @@ export type WorkflowToolInput = {
   script?: string;
   name?: string;
   args?: Record<string, unknown>;
-  background?: boolean;
+  wait?: boolean;
   maxAgents?: number;
   concurrency?: number;
   agentRetries?: number;
@@ -251,11 +251,10 @@ export function createWorkflowTool(options: WorkflowToolOptions = {}): ToolDefin
         ? (promptText: string) => uiConfirm.call(uiCtx?.ui, "Workflow checkpoint", promptText)
         : undefined;
 
-      // Background execution is the default: return immediately so the turn ends
-      // and the user isn't blocked. The result is delivered back into the
-      // conversation when the run finishes (see installResultDelivery). Only an
-      // explicit `background: false` blocks for the result inline.
-      if (params.background ?? true) {
+      // Return immediately unless the caller positively opts into waiting. The
+      // old `background: false` spelling is intentionally ignored so a stale
+      // model call cannot turn a workflow into a blocking tool call.
+      if (params.wait !== true) {
         const { runId } = manager.startInBackground(script, params.args, {
           maxAgents: params.maxAgents,
           concurrency: params.concurrency,

@@ -37,13 +37,13 @@ const EXPECTED_TOOL_INPUTS = [
   "agentRetries",
   "agentTimeoutMs",
   "args",
-  "background",
   "concurrency",
   "maxAgents",
   "name",
   "resumeFromRunId",
   "script",
   "tokenBudget",
+  "wait",
 ] as const;
 
 function implementations(): Record<string, unknown> {

@@ -31,7 +31,7 @@ This compact generated index covers supported runtime globals and workflow-tool 
 | script | workflow-tool-input | `script?: string` | — |
 | name | workflow-tool-input | `name?: string` | — |
 | args | workflow-tool-input | `args?: unknown` | — |
-| background | workflow-tool-input | `background?: boolean = true` | — |
+| wait | workflow-tool-input | `wait?: boolean = false` | — |
 | maxAgents | workflow-tool-input | `maxAgents?: number = 1000` | — |
 | concurrency | workflow-tool-input | `concurrency?: number` | — |
 | agentRetries | workflow-tool-input | `agentRetries?: number = configured value or 0` | — |

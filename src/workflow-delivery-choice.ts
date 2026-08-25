@@ -2,14 +2,14 @@
 export interface WorkflowDeliveryChoiceScenario {
   id: string;
   prompt: string;
-  expectedBackground: boolean;
+  expectedWait: boolean;
   expectedTokenBudget: number | null;
 }
 
 /** Pure scoring result for one captured workflow tool invocation. */
 export interface WorkflowDeliveryChoiceEvaluation {
   passed: boolean;
-  resolvedBackground: boolean | null;
+  resolvedWait: boolean | null;
   resolvedTokenBudget: number | null;
   assertions: Array<{ name: string; passed: boolean; details: string }>;
 }
@@ -20,21 +20,21 @@ export const WORKFLOW_DELIVERY_CHOICE_SCENARIOS: readonly WorkflowDeliveryChoice
     id: "background-delivery",
     prompt:
       "Run a workflow to audit the repository from several independent angles. I do not need the result in this turn; let it be delivered back later so I can keep working.",
-    expectedBackground: true,
+    expectedWait: false,
     expectedTokenBudget: null,
   },
   {
     id: "inline-result",
     prompt:
       "Run a workflow to compare the two proposed designs, then use its result in your answer in this same turn. I am waiting for the result before you respond.",
-    expectedBackground: false,
+    expectedWait: true,
     expectedTokenBudget: null,
   },
   {
     id: "explicit-token-budget",
     prompt:
       "Run a workflow to audit the repository from several independent angles. Cap the run at exactly 200,000 tokens and let the result be delivered back later.",
-    expectedBackground: true,
+    expectedWait: false,
     expectedTokenBudget: 200_000,
   },
 ];
@@ -48,14 +48,14 @@ export function evaluateWorkflowDeliveryChoice(
   const hasScript = typeof input?.script === "string" && input.script.trim().length > 0;
   const hasName = typeof input?.name === "string" && input.name.trim().length > 0;
   const hasWorkflow = hasScript || hasName;
-  const validBackground = input !== null && (input.background === undefined || typeof input.background === "boolean");
-  const resolvedBackground = validBackground ? (typeof input.background === "boolean" ? input.background : true) : null;
+  const validWait = input !== null && (input.wait === undefined || typeof input.wait === "boolean");
+  const resolvedWait = validWait ? input.wait === true : null;
   const validTokenBudget =
     input !== null &&
     (input.tokenBudget === undefined ||
       (typeof input.tokenBudget === "number" && Number.isFinite(input.tokenBudget) && input.tokenBudget > 0));
   const resolvedTokenBudget = validTokenBudget && typeof input.tokenBudget === "number" ? input.tokenBudget : null;
-  const timingMatches = resolvedBackground === scenario.expectedBackground;
+  const timingMatches = resolvedWait === scenario.expectedWait;
   const tokenBudgetMatches = validTokenBudget && resolvedTokenBudget === scenario.expectedTokenBudget;
   const assertions = [
     {
@@ -64,16 +64,16 @@ export function evaluateWorkflowDeliveryChoice(
       details: "the model must invoke the workflow tool with a nonblank script or saved/built-in name",
     },
     {
-      name: "background:valid-type",
-      passed: validBackground,
-      details: "background must be omitted for its true default or supplied as a boolean",
+      name: "wait:valid-type",
+      passed: validWait,
+      details: "wait must be omitted for its false default or supplied as a boolean",
     },
     {
-      name: "background:matches-user-timing",
+      name: "wait:matches-user-timing",
       passed: timingMatches,
-      details: scenario.expectedBackground
-        ? "later delivery should use the default background run"
-        : "same-turn use should pass background: false",
+      details: scenario.expectedWait
+        ? "same-turn use should pass wait: true"
+        : "later delivery should omit wait and use the default background run",
     },
     {
       name: "tokenBudget:valid-positive-number",
@@ -91,7 +91,7 @@ export function evaluateWorkflowDeliveryChoice(
   ];
   return {
     passed: assertions.every(({ passed }) => passed),
-    resolvedBackground,
+    resolvedWait,
     resolvedTokenBudget,
     assertions,
   };

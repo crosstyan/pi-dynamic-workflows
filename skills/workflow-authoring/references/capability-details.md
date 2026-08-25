@@ -254,13 +254,14 @@ Every exact fact below is projected from the installed extension's capability co
 - Support: `supported`
 - Signature: `args?: unknown`
 
-<a id="tool-input-background"></a>
-## background
+<a id="tool-input-wait"></a>
+## wait
 
 - Classification: `workflow-tool-input`
 - Support: `supported`
-- Signature: `background?: boolean = true`
-- Constraint: background workflows are headless; use background false when checkpoint must show foreground confirmation
+- Signature: `wait?: boolean = false`
+- Constraint: set true only when the user explicitly asks to wait for the workflow result before continuing
+- Constraint: background workflows are headless; use wait true when checkpoint must show foreground confirmation
 
 <a id="tool-input-maxagents"></a>
 ## maxAgents

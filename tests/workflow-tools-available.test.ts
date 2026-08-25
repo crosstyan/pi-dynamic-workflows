@@ -965,16 +965,16 @@ describe("workflow extension - control tool availability", () => {
 
         pi2._bound = true;
         _resetDeliveryRegistriesForTests();
-        _registerBoundSessionSendForTests("s-prebind", (msg) => {
-          if (typeof msg.content === "string") delivered.push(msg.content);
-          return Promise.resolve();
-        });
         handlers2.session_start?.[0]?.(
           { reason: "reload" },
           {
             cwd: process.cwd(),
             model: undefined,
             modelRegistry: {},
+            sendMessage: (msg: { content?: string }) => {
+              if (typeof msg.content === "string") delivered.push(msg.content);
+              return Promise.resolve(true);
+            },
             sessionManager: {
               getSessionId: () => "s-prebind",
             },

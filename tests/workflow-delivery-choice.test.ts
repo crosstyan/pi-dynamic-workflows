@@ -15,14 +15,14 @@ test("delivery-choice scenarios cover timing and token-budget intent", () => {
   assert.ok(inline);
   assert.ok(CAPPED_SCENARIO);
   assert.equal(WORKFLOW_DELIVERY_CHOICE_SCENARIOS.length, 3);
-  assert.equal(delayed.expectedBackground, true);
+  assert.equal(delayed.expectedWait, false);
   assert.equal(delayed.expectedTokenBudget, null);
   assert.match(delayed.prompt, /deliver.*later|later.*deliver/i);
-  assert.equal(inline.expectedBackground, false);
+  assert.equal(inline.expectedWait, true);
   assert.equal(inline.expectedTokenBudget, null);
   assert.match(inline.prompt, /same turn/i);
   assert.match(inline.prompt, /waiting/i);
-  assert.equal(CAPPED_SCENARIO.expectedBackground, true);
+  assert.equal(CAPPED_SCENARIO.expectedWait, false);
   assert.equal(CAPPED_SCENARIO.expectedTokenBudget, 200_000);
   assert.match(CAPPED_SCENARIO.prompt, /exactly 200,?000 tokens/i);
 });
@@ -30,8 +30,8 @@ test("delivery-choice scenarios cover timing and token-budget intent", () => {
 test("delivery-choice scoring accepts omitted token budgets for ordinary requests", () => {
   assert.ok(delayed);
   assert.equal(evaluateWorkflowDeliveryChoice(delayed, { script: "return {}" }).passed, true);
-  assert.equal(evaluateWorkflowDeliveryChoice(delayed, { script: "return {}", background: true }).passed, true);
-  assert.equal(evaluateWorkflowDeliveryChoice(delayed, { script: "return {}", background: false }).passed, false);
+  assert.equal(evaluateWorkflowDeliveryChoice(delayed, { script: "return {}", wait: false }).passed, true);
+  assert.equal(evaluateWorkflowDeliveryChoice(delayed, { script: "return {}", wait: true }).passed, false);
   assert.equal(evaluateWorkflowDeliveryChoice(delayed, { script: "return {}", tokenBudget: 20_000 }).passed, false);
 });
 
@@ -52,20 +52,20 @@ test("delivery-choice scoring requires the exact user-supplied token budget", ()
   );
 });
 
-test("delivery-choice scoring requires background false for same-turn use", () => {
+test("delivery-choice scoring requires wait true for same-turn use", () => {
   assert.ok(inline);
-  assert.equal(evaluateWorkflowDeliveryChoice(inline, { script: "return {}", background: false }).passed, true);
+  assert.equal(evaluateWorkflowDeliveryChoice(inline, { script: "return {}", wait: true }).passed, true);
   assert.equal(evaluateWorkflowDeliveryChoice(inline, { script: "return {}" }).passed, false);
-  assert.equal(evaluateWorkflowDeliveryChoice(inline, { script: "return {}", background: true }).passed, false);
+  assert.equal(evaluateWorkflowDeliveryChoice(inline, { script: "return {}", wait: false }).passed, false);
 });
 
 test("delivery-choice scoring rejects malformed workflow calls", () => {
   assert.ok(delayed);
   assert.equal(evaluateWorkflowDeliveryChoice(delayed, null).passed, false);
-  assert.equal(evaluateWorkflowDeliveryChoice(delayed, { background: true }).passed, false);
-  assert.equal(evaluateWorkflowDeliveryChoice(delayed, { script: "", background: true }).passed, false);
-  assert.equal(evaluateWorkflowDeliveryChoice(delayed, { name: "", background: true }).passed, false);
-  assert.equal(evaluateWorkflowDeliveryChoice(delayed, { script: "return {}", background: "true" }).passed, false);
+  assert.equal(evaluateWorkflowDeliveryChoice(delayed, { wait: false }).passed, false);
+  assert.equal(evaluateWorkflowDeliveryChoice(delayed, { script: "", wait: false }).passed, false);
+  assert.equal(evaluateWorkflowDeliveryChoice(delayed, { name: "", wait: false }).passed, false);
+  assert.equal(evaluateWorkflowDeliveryChoice(delayed, { script: "return {}", wait: "true" }).passed, false);
   assert.equal(evaluateWorkflowDeliveryChoice(delayed, { script: "return {}", tokenBudget: "200000" }).passed, false);
   assert.equal(evaluateWorkflowDeliveryChoice(delayed, { script: "return {}", tokenBudget: -1 }).passed, false);
 });

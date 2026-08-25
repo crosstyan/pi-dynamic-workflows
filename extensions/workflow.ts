@@ -325,9 +325,18 @@ export default function extension(pi: ExtensionAPI) {
     // session-stable delivery endpoint for THIS session only, then flush any
     // disk/memory pending for this sessionId (parallel siblings never share it).
     if (sessionId) {
+      const sessionSend = (
+        ctx as ExtensionContext & {
+          sendMessage?: (
+            message: { customType: string; content: string; display?: boolean },
+            options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
+          ) => Promise<unknown>;
+        }
+      ).sendMessage;
       bindSessionDelivery(sessionId, pi, {
         loadSettings: () => loadWorkflowSettings({ cwd: getCwd() }),
         manager,
+        stableSend: sessionSend?.bind(ctx),
         sessionManager: ctx.sessionManager,
       });
       if (previousSessionId && previousSessionId !== sessionId) {

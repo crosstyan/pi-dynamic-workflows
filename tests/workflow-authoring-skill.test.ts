@@ -132,7 +132,7 @@ test("one generated supported-capability table is fresh across skill, README, an
   }
   assert.match(generatedTable, /agent\(prompt, options\?\)/);
   assert.match(generatedTable, /label.*string.*optional.*derived from phase and call count/i);
-  assert.match(generatedTable, /background\?: boolean = true/);
+  assert.match(generatedTable, /wait\?: boolean = false/);
   assert.match(
     readFileSync(join(ROOT, "README.md"), "utf8"),
     /\[workflow authoring guide\]\(docs\/workflow-authoring\.md\)/,
@@ -274,7 +274,7 @@ test("generated helper facts expose exact callback, option, result, and failure 
   const retry = facts.get("workflow.runtime.retry");
   const pipeline = facts.get("workflow.runtime.pipeline");
   const agent = facts.get("workflow.runtime.agent");
-  const background = facts.get("workflow.tool-input.background");
+  const wait = facts.get("workflow.tool-input.wait");
   const metadata = facts.get("workflow.script.metadata");
 
   assert.match(verify?.signature ?? "", /reviewers.*threshold.*lens.*realCount.*votes/i);
@@ -352,8 +352,8 @@ test("generated helper facts expose exact callback, option, result, and failure 
   assert.match(agent?.constraints.join(" ") ?? "", /explicit model.*unavailable.*throws MODEL_NOT_FOUND/i);
   assert.match(agent?.constraints.join(" ") ?? "", /implicit default medium tier.*session default when unavailable/i);
   assert.match(agent?.constraints.join(" ") ?? "", /worktree isolation.*best-effort/i);
-  assert.match(background?.constraints.join(" ") ?? "", /background workflows are headless/i);
-  assert.match(background?.constraints.join(" ") ?? "", /checkpoint.*foreground confirmation/i);
+  assert.match(wait?.constraints.join(" ") ?? "", /background workflows are headless/i);
+  assert.match(wait?.constraints.join(" ") ?? "", /checkpoint.*foreground confirmation/i);
   assert.match(metadata?.signature ?? "", /phases\?: Array<\{ title: string; detail\?: string; model\?: string \}>/);
   assert.match(metadata?.constraints.join(" ") ?? "", /only legal export/i);
   assert.match(metadata?.constraints.join(" ") ?? "", /literal.*string concatenation.*template interpolation/i);

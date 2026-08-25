@@ -155,9 +155,9 @@ function deliveredMaxChars(opts: { loadSettings?: () => WorkflowSettings }): num
  * the route without any shutdown on the origin.
  *
  * Fix: process-wide endpoint registry keyed by sessionId. Each session_start
- * registers a session-stable send captured from the *host* AgentSession's
- * sendCustomMessage (returns a real Promise — unlike actions.sendMessage
- * which is void and swallows rejects). Completions resolve `run.sessionId`,
+ * registers a session-stable Promise-returning send from the host context when
+ * available. The private AgentSession capture remains as a fallback for Pi
+ * hosts that do not expose that method. Completions resolve `run.sessionId`,
  * persist a pending marker first, then deliver only via that session's
  * endpoint. Clear the marker only after the send Promise settles successfully.
  * Missing/suspended endpoint or non-thenable send → leave pending (fail
@@ -527,8 +527,8 @@ function routeBackgroundDelivery(
 
 /**
  * Register or refresh the delivery endpoint for a pi session. Requires a
- * session-stable thenable send (stolen host AgentSession.sendCustomMessage, or
- * test DI). Never falls back to shared pi.sendMessage. A durable
+ * session-stable thenable send from the host context, the Pi fallback capture,
+ * or test DI. Never falls back to shared pi.sendMessage. A durable
  * appendCustomMessageEntry is not an ACK (no triggerTurn).
  *
  * Call from session_start AFTER Pi bindCore. Unsuspends and flushes disk pending
@@ -541,8 +541,8 @@ export function bindSessionDelivery(
     loadSettings?: () => WorkflowSettings;
     manager?: WorkflowManager;
     /**
-     * Optional explicit thenable send (tests / DI). Wins over the process-wide
-     * steal map when provided.
+     * Optional explicit thenable send from the session context or test DI. Wins
+     * over the process-wide Pi fallback map when provided.
      */
     stableSend?: DeliverySend;
     /**

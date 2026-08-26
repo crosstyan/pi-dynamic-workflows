@@ -157,12 +157,14 @@ function deliveredMaxChars(opts: { loadSettings?: () => WorkflowSettings }): num
  * Fix: process-wide endpoint registry keyed by sessionId. Each session_start
  * registers a session-stable Promise-returning send from the host context when
  * available. The private AgentSession capture remains as a fallback for Pi
- * hosts that do not expose that method. Completions resolve `run.sessionId`,
- * persist a pending marker first, then deliver only via that session's
- * endpoint. Clear the marker only after the send Promise settles successfully.
- * Missing/suspended endpoint or non-thenable send → leave pending (fail
- * closed). Never fall back to shared `pi.sendMessage` / runtime.sendMessage,
- * and never ACK on a durable append (that writes history without triggerTurn).
+ * hosts that do not expose that method. OMP instead provides one ExtensionAPI
+ * per session; its public void sendMessage can be wrapped as a synchronous
+ * accepted-for-delivery acknowledgement after that host contract is detected.
+ * Completions resolve `run.sessionId`, persist a pending marker first, then
+ * deliver only via that session's endpoint. Missing/suspended endpoint or an
+ * untrusted non-thenable send leaves pending fail-closed. Never use a
+ * process-global `pi.sendMessage`, and never ACK on a durable append (that
+ * writes history without triggerTurn).
  */
 
 type DeliverySend = (
@@ -173,9 +175,9 @@ type DeliverySend = (
 interface SessionDeliveryEndpoint {
   sessionId: string;
   /**
-   * Session-stable send that MUST return a thenable for ACK. Captured from
-   * the host AgentSession.sendCustomMessage (not the void actions.sendMessage
-   * wrapper, and not a durable-only append).
+   * Session-stable send that MUST return a thenable for ACK. Either captured
+   * from host AgentSession.sendCustomMessage or adapted from an explicitly
+   * session-scoped host API; never a process-global void send or durable append.
    */
   send?: DeliverySend;
   loadSettings?: () => WorkflowSettings;
@@ -528,8 +530,9 @@ function routeBackgroundDelivery(
 /**
  * Register or refresh the delivery endpoint for a pi session. Requires a
  * session-stable thenable send from the host context, the Pi fallback capture,
- * or test DI. Never falls back to shared pi.sendMessage. A durable
- * appendCustomMessageEntry is not an ACK (no triggerTurn).
+ * or test DI. OMP may explicitly assert that this ExtensionAPI is session-scoped;
+ * in that host, its public void sendMessage is an accepted-for-delivery signal.
+ * A durable appendCustomMessageEntry is not an ACK (no triggerTurn).
  *
  * Call from session_start AFTER Pi bindCore. Unsuspends and flushes disk pending
  * for this sessionId only.
@@ -545,6 +548,13 @@ export function bindSessionDelivery(
      * over the process-wide Pi fallback map when provided.
      */
     stableSend?: DeliverySend;
+    /**
+     * The host guarantees this ExtensionAPI instance is bound to exactly this
+     * session. OMP 18 does this but exposes sendMessage as void, so successful
+     * synchronous acceptance is the strongest acknowledgement its public
+     * extension contract provides. Never enable this for process-global Pi APIs.
+     */
+    sessionScopedSend?: boolean;
     /**
      * Optional sessionManager. getSessionId is identity only — append is not
      * an ACK channel.
@@ -564,9 +574,15 @@ export function bindSessionDelivery(
   patchAgentSessionCapture();
   patchBindCoreObserve();
 
-  const stolen = opts.stableSend ?? boundSessionSends.get(sessionId);
+  const sessionScopedSend: DeliverySend | undefined = opts.sessionScopedSend
+    ? (message, options) => {
+        _pi.sendMessage(message, options);
+        return Promise.resolve();
+      }
+    : undefined;
+  const deliverySend = opts.stableSend ?? boundSessionSends.get(sessionId) ?? sessionScopedSend;
 
-  if (!stolen) {
+  if (!deliverySend) {
     console.warn(
       `[workflow-delivery] no session-stable thenable send for session ${sessionId}; ` +
         "endpoint registered fail-closed (completions stay on disk until a host send is captured).",
@@ -587,7 +603,7 @@ export function bindSessionDelivery(
   const prev = sessionEndpoints.get(sessionId);
   const endpoint: SessionDeliveryEndpoint = {
     sessionId,
-    send: stolen,
+    send: deliverySend,
     loadSettings: opts.loadSettings ?? prev?.loadSettings,
     suspended: false,
     generation: (prev?.generation ?? 0) + 1,

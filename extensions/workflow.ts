@@ -43,6 +43,24 @@ import type { WorkflowStorage } from "../src/workflow-saved.js";
 const SESSION_HEADER_SCAN_BYTES = 64 * 1024;
 
 /**
+ * OMP loads a fresh ExtensionAPI for each session and exposes these two
+ * context capabilities together. Upstream Pi 0.83 has neither combination and
+ * historically shared the send runtime across sibling sessions, so its public
+ * void pi.sendMessage must not be used as a session-stable delivery endpoint.
+ */
+export function isOmpSessionScopedExtensionContext(ctx: ExtensionContext): boolean {
+  const candidate = ctx as ExtensionContext & {
+    getAsyncJobSnapshot?: () => unknown;
+    models?: { list?: unknown; resolve?: unknown };
+  };
+  return (
+    typeof candidate.getAsyncJobSnapshot === "function" &&
+    typeof candidate.models?.list === "function" &&
+    typeof candidate.models.resolve === "function"
+  );
+}
+
+/**
  * Read-only probe of a session JSONL file's project cwd from its header line.
  * Does NOT call SessionManager.open() — that API creates directories, may rewrite
  * empty/legacy files, and loads the full history. Used on session_shutdown for
@@ -337,6 +355,7 @@ export default function extension(pi: ExtensionAPI) {
         loadSettings: () => loadWorkflowSettings({ cwd: getCwd() }),
         manager,
         stableSend: sessionSend?.bind(ctx),
+        sessionScopedSend: isOmpSessionScopedExtensionContext(ctx),
         sessionManager: ctx.sessionManager,
       });
       if (previousSessionId && previousSessionId !== sessionId) {

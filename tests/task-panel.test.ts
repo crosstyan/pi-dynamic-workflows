@@ -191,6 +191,7 @@ type TaskPanelModule = {
       loadSettings?: () => unknown;
       manager?: unknown;
       stableSend?: StableSend;
+      sessionScopedSend?: boolean;
       sessionManager?: {
         getSessionId?: () => string;
         appendCustomMessageEntry?: (
@@ -303,10 +304,11 @@ describe("installResultDelivery", () => {
   function createMockPi(): ExtensionAPI & { _calls: DeliveryCall[] } {
     const calls: DeliveryCall[] = [];
     const obj = {
-      sendMessage(msg: unknown, _opts?: unknown) {
+      sendMessage(msg: unknown, opts?: unknown) {
         calls.push({
           content: (msg as { content?: string }).content ?? "",
           customType: (msg as { customType?: string }).customType,
+          triggerTurn: (opts as { triggerTurn?: boolean } | undefined)?.triggerTurn,
         });
       },
       registerTool: () => {},
@@ -1313,6 +1315,53 @@ describe("installResultDelivery", () => {
 
     assert.equal(piCalls(pi).length, 0, "no stableSend → never fall back to pi.sendMessage");
     assert.ok(manager.getPersistence?.().load("test-run-1")?.pendingDelivery, "pending stays on disk");
+  });
+
+  it("OMP session-scoped void send delivers and clears disk pending", async () => {
+    const pi = createMockPi();
+    const manager = createMockManager(makeRun());
+
+    mod.installResultDelivery(pi as unknown as ExtensionAPI, manager);
+    manager.setSessionId(SESSION);
+    mod.bindSessionDelivery(SESSION, pi as unknown as ExtensionAPI, {
+      manager,
+      sessionScopedSend: true,
+    });
+    manager.emit("complete", { runId: "test-run-1" });
+
+    assert.equal(piCalls(pi).length, 1, "OMP's public session-bound send receives the completion");
+    assert.equal(piCalls(pi)[0]?.triggerTurn, true);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(
+      manager.getPersistence?.().load("test-run-1")?.pendingDelivery,
+      undefined,
+      "accepted OMP delivery clears the pending marker",
+    );
+  });
+
+  it("OMP session-scoped synchronous send failure keeps disk pending", async () => {
+    const pi = createMockPi();
+    pi.sendMessage = () => {
+      throw new Error("host rejected message");
+    };
+    const manager = createMockManager(makeRun());
+
+    mod.installResultDelivery(pi as unknown as ExtensionAPI, manager);
+    manager.setSessionId(SESSION);
+    mod.bindSessionDelivery(SESSION, pi as unknown as ExtensionAPI, {
+      manager,
+      sessionScopedSend: true,
+    });
+    manager.emit("complete", { runId: "test-run-1" });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.ok(
+      manager.getPersistence?.().load("test-run-1")?.pendingDelivery,
+      "a rejected OMP delivery remains retryable from disk",
+    );
   });
 
   it("suspended endpoint never sends", () => {

@@ -360,6 +360,25 @@ describe("installWorkflowKeywordArming - tool availability", () => {
 });
 
 describe("workflow extension - control tool availability", () => {
+  it("enables session-scoped delivery only for the OMP context contract", async () => {
+    const { isOmpSessionScopedExtensionContext } = await import("../extensions/workflow.js");
+
+    assert.equal(
+      isOmpSessionScopedExtensionContext({
+        getAsyncJobSnapshot: () => null,
+        models: { list: () => [], resolve: () => undefined },
+      } as never),
+      true,
+    );
+    assert.equal(
+      isOmpSessionScopedExtensionContext({
+        scopedModels: [],
+      } as never),
+      false,
+      "upstream Pi must keep the Promise-acknowledged path",
+    );
+  });
+
   it("registers both control tools and hands the live runtime across reload", async () => {
     const fakeHome = mkdtempSync(join(tmpdir(), "pi-dw-control-extension-"));
     try {
